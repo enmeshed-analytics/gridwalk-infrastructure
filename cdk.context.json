@@ -1,0 +1,12 @@
+{
+  "availability-zones:account=017820660020:region=us-east-1": [
+    "us-east-1a",
+    "us-east-1b",
+    "us-east-1c",
+    "us-east-1d",
+    "us-east-1e",
+    "us-east-1f"
+  ],
+  "ami:account=017820660020:filters.image-type.0=machine:filters.name.0=debian-12-amd64-*:filters.state.0=available:owners.0=136693071363:region=us-east-1": "ami-064519b8c76274859",
+  "ami:account=017820660020:filters.image-type.0=machine:filters.name.0=ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*:filters.state.0=available:owners.0=099720109477:region=us-east-1": "ami-0773ec03f3f6dba16"
+}

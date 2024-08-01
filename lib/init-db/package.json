@@ -1,0 +1,16 @@
+{
+  "name": "init-db",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "type": "module",
+  "author": "zerj9",
+  "license": "MIT",
+  "dependencies": {
+    "pg": "^8.11.3",
+    "@aws-sdk/client-secrets-manager": "^3.504.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.133",
+    "@types/pg": "^8.11.0"
+  }
+}
