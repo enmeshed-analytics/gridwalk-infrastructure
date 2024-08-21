@@ -85,8 +85,19 @@ export class Martin extends Construct {
         'pool_size': 20,
         'default_srid': 3857,
         'auto_bounds': 'skip',
-        'auto_publish': {
-          'from_schemas': ['geo']
+        'functions': {
+          'roads': {
+            'schema': 'geo',
+            'function': 'roads_mvt',
+            'minzoom': 0,
+            'maxzoom': 22
+          },
+          'buildings': {
+            'schema': 'geo',
+            'function': 'buildings_mvt',
+            'minzoom': 0,
+            'maxzoom': 22
+          }
         }
       }
     });
