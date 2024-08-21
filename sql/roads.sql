@@ -41,7 +41,7 @@ DECLARE
 BEGIN
     -- Select the appropriate materialized view based on zoom level
     source_table := CASE
-        WHEN z >= 9 THEN 'roads_all'
+        WHEN z >= 13 THEN 'roads_all'
         WHEN z >= 8 THEN 'roads_up_to_secondary'
         WHEN z >= 5 THEN 'roads_up_to_trunk'
         ELSE 'roads_motorways'

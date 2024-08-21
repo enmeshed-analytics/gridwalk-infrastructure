@@ -35,10 +35,15 @@ DECLARE
     source_table text;
     mvt bytea;
 BEGIN
+    -- Return NULL for large zoom levels
+    IF z < 12 THEN
+        RETURN NULL;
+    END IF;
+
     -- Select the appropriate materialized view based on zoom level
     source_table := CASE
-        WHEN z >= 8 THEN 'buildings_up_to_accommodation'
-        WHEN z >= 5 THEN 'buildings_up_to_commercial'
+        WHEN z >= 15 THEN 'buildings_up_to_accommodation'
+        WHEN z >= 12 THEN 'buildings_up_to_commercial'
         ELSE 'buildings_all'
     END;
     -- Generate MVT
@@ -48,7 +53,7 @@ BEGIN
             SELECT
                 osm_id,
                 name,
-                highway,
+                building,
                 ST_AsMVTGeom(
                     geom,
                     ST_TileEnvelope(%s, %s, %s),

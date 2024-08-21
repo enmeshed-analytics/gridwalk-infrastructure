@@ -9,6 +9,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as yaml from 'js-yaml';
 import { Construct } from 'constructs';
 
+
 interface MartinProps extends cdk.StackProps {
   vpc: ec2.IVpc;
   cluster: ecs.ICluster;
@@ -76,13 +77,13 @@ export class Martin extends Construct {
     const configContent = yaml.dump({
       'keep_alive': 75,
       'listen_addresses': '0.0.0.0:8080',
-      'worker_processes': 3,
-      'cache_size_mb': 1024,
+      'worker_processes': 30,
+      'cache_size_mb': 2048,
       'preferred_encoding': 'gzip',
       'web_ui': 'enable-for-all',
       'postgres': {
         'connection_string': 'postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_ENDPOINT}:${DB_PORT}/${DB_NAME}',
-        'pool_size': 20,
+        'pool_size': 100,
         'default_srid': 3857,
         'auto_bounds': 'skip',
         'functions': {
@@ -95,7 +96,7 @@ export class Martin extends Construct {
           'buildings': {
             'schema': 'geo',
             'function': 'buildings_mvt',
-            'minzoom': 0,
+            'minzoom': 12,
             'maxzoom': 22
           }
         }
