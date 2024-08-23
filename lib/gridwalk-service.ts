@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
@@ -14,6 +15,7 @@ interface GridwalkProps extends cdk.StackProps {
   cpu: number;
   memoryLimitMiB: number;
   desiredCount: number;
+  dynamodbTable: dynamodb.TableV2;
   serviceConnectNamespace: string;
   tileServerUrl: string;
   listener: elbv2.IApplicationListener;
@@ -22,12 +24,13 @@ interface GridwalkProps extends cdk.StackProps {
 
 export class Gridwalk extends Construct {
   public readonly securityGroup: ec2.SecurityGroup;
+  public readonly taskDefinition: ecs.FargateTaskDefinition;
 
   constructor(scope: Construct, id: string, props: GridwalkProps) {
     super(scope, id);
 
     // Create a task definition
-    const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDef', {
+    this.taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDef', {
       memoryLimitMiB: props.memoryLimitMiB,
       cpu: props.cpu,
       runtimePlatform: {
@@ -36,10 +39,11 @@ export class Gridwalk extends Construct {
     });
 
     // Add container to the task definition
-    const container = taskDefinition.addContainer('GridwalkContainer', {
+    const container = this.taskDefinition.addContainer('GridwalkContainer', {
       image: ecs.ContainerImage.fromEcrRepository(props.ecrRepository, props.ecrImageTag),
       environment: {
         TILE_SERVER_URL: props.tileServerUrl,
+        TABLE_NAME: props.dynamodbTable.tableName,
       },
       logging: new ecs.AwsLogDriver({ streamPrefix: 'GridwalkService' }),
     });
@@ -71,7 +75,7 @@ export class Gridwalk extends Construct {
     // Create the Fargate service
     const fargateService = new ecs.FargateService(this, 'Service', {
       cluster: props.cluster,
-      taskDefinition,
+      taskDefinition: this.taskDefinition,
       desiredCount: props.desiredCount,
       serviceName: props.serviceName,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
@@ -111,6 +115,6 @@ export class Gridwalk extends Construct {
     });
 
     // Grant the task execution role permission to pull images from ECR
-    props.ecrRepository.grantPull(taskDefinition.executionRole!);
+    props.ecrRepository.grantPull(this.taskDefinition.executionRole!);
   }
 }

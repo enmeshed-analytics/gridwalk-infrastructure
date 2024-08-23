@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -32,7 +33,7 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
       hostedZones: [this.hostedZone]
     });
 
-    this.ecrImage = new ImageRepositories(this, "ImageRepositories")
+    this.ecrImage = new ImageRepositories(this, "ImageRepositories");
 
     const database = new Database(this, 'Database', {
       network: {
@@ -42,28 +43,29 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
       databaseName: 'gridwalk',
       schemaName: 'geo',
       allocatedStorage: 20
-    })
+    });
 
     const instance = new Instance(this, 'Adhoc', {
       network: {
         vpc: this.network.vpc
       }
-    })
+    });
 
     // Allow EC2 to connect to Postgres
     database.databaseSecurityGroup.addIngressRule(
       ec2.Peer.securityGroupId(instance.instanceSecurityGroup.securityGroupId),
       ec2.Port.POSTGRES,
       "EC2 to Postgres"
-    )
+    );
+
     // Allow EC2 to get secretcontaining Postgres details
-    database.instance.secret!.grantRead(instance.instanceRole)
+    database.instance.secret!.grantRead(instance.instanceRole);
 
     const cluster = new ecs.Cluster(this, 'Cluster', { vpc: this.network.vpc });
     const namespace = new servicediscovery.PrivateDnsNamespace(this, 'Discovery', {
       vpc: this.network.vpc,
       name: "Gridwalk"
-    })
+    });
 
     const martin = new Martin(this, 'Martin', {
       vpc: this.network.vpc,
@@ -76,11 +78,16 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
       desiredCount: 1,
       serviceConnectNamespace: namespace.namespaceName,
       databaseSecret: database.instance.secret!,
-    })
+    });
 
     database.databaseSecurityGroup.addIngressRule(
       martin.securityGroup, ec2.Port.POSTGRES, "Allow martin to connect to Postgres"
-    )
+    );
+
+    const gridwalkTable = new dynamodb.TableV2(this, 'GridwalkTable', {
+      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
+    });
 
     const gridwalk = new Gridwalk(this, 'Gridwalk', {
       vpc: this.network.vpc,
@@ -91,15 +98,17 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
       cpu: 512,
       memoryLimitMiB: 1024,
       desiredCount: 1,
+      dynamodbTable: gridwalkTable,
       serviceConnectNamespace: namespace.namespaceName,
       tileServerUrl: 'http://martin:8080',
       listener: this.network.httpsListener,
       baseUrl: 'gridwalk.co'
-    })
+    });
+
+    gridwalkTable.grantReadWriteData(gridwalk.taskDefinition.taskRole!);
 
     martin.securityGroup.addIngressRule(
       gridwalk.securityGroup, ec2.Port.tcp(8080), "Allow gridwalk to connect to martin"
-    )
-
+    );
   }
 }
