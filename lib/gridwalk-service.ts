@@ -4,6 +4,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
 interface GridwalkProps extends cdk.StackProps {
@@ -38,12 +39,19 @@ export class Gridwalk extends Construct {
       }
     });
 
+    const os_api_secret = secretsmanager.Secret.fromSecretPartialArn(
+      this, "OsApiSecret", "arn:aws:secretsmanager:us-east-1:017820660020:secret:os_api_gridwalk_basemap"
+    );
+
     // Add container to the task definition
     const container = this.taskDefinition.addContainer('GridwalkContainer', {
       image: ecs.ContainerImage.fromEcrRepository(props.ecrRepository, props.ecrImageTag),
       environment: {
-        TILE_SERVER_URL: props.tileServerUrl,
-        TABLE_NAME: props.dynamodbTable.tableName,
+        DYNAMODB_TABLE: props.dynamodbTable.tableName,
+      },
+      secrets: {
+        OS_PROJECT_API_KEY: ecs.Secret.fromSecretsManager(os_api_secret, 'project_api_key'),
+        OS_PROJECT_API_SECRET: ecs.Secret.fromSecretsManager(os_api_secret, 'project_api_secret'),
       },
       logging: new ecs.AwsLogDriver({ streamPrefix: 'GridwalkService' }),
     });
