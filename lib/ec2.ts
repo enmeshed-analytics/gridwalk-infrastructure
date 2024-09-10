@@ -40,7 +40,7 @@ export class Instance extends Construct {
 
     this.instance = new ec2.Instance(this, 'Instance', {
       vpc: props.network.vpc,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       machineImage: ubuntu,
       role: this.instanceRole,
       securityGroup: this.instanceSecurityGroup,
