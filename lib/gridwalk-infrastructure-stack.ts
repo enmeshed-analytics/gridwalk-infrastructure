@@ -1,8 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import { Construct } from 'constructs';
 import { Network } from './network';
@@ -11,6 +13,7 @@ import { Instance } from './ec2'
 import { Database } from './data'
 import { Martin } from './martin'
 import { Gridwalk } from './gridwalk-service'
+import { CloudFrontToS3 } from '@aws-solutions-constructs/aws-cloudfront-s3';
 
 
 export class GridwalkInfrastructureStack extends cdk.Stack {
@@ -20,6 +23,54 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // Landing page
+
+    new CloudFrontToS3(this, 'GridwalkLanding', {
+      bucketProps: {
+        encryption: s3.BucketEncryption.S3_MANAGED,
+      },
+      cloudFrontDistributionProps: {
+        defaultBehavior: {
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        },
+        minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
+      },
+      responseHeadersPolicyProps: {
+        responseHeadersPolicyName: 'CustomCSPPolicy',
+        securityHeadersBehavior: {
+          contentSecurityPolicy: {
+            contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';",
+            override: true,
+          },
+          strictTransportSecurity: {
+            accessControlMaxAge: cdk.Duration.days(2 * 365),
+            includeSubdomains: true,
+            preload: true,
+            override: true,
+          },
+          contentTypeOptions: {
+            override: true,
+          },
+          referrerPolicy: {
+            referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+            override: true,
+          },
+          xssProtection: {
+            protection: true,
+            modeBlock: true,
+            override: true,
+          },
+          frameOptions: {
+            frameOption: cloudfront.HeadersFrameOption.DENY,
+            override: true,
+          },
+        },
+      },
+      insertHttpSecurityHeaders: false,
+    });
+
+    // Landing page End
 
     this.hostedZone = route53.PublicHostedZone.fromPublicHostedZoneAttributes(
       this, 'HostedZone', {
@@ -86,7 +137,6 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
 
     const gridwalkTable = new dynamodb.TableV2(this, 'GridwalkTable', {
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
     });
 
     const gridwalk = new Gridwalk(this, 'Gridwalk', {
