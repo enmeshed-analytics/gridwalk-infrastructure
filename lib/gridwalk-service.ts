@@ -8,44 +8,47 @@ import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
 
-interface GridwalkProps extends cdk.StackProps {
-  vpc: ec2.IVpc;
-  cluster: ecs.ICluster;
+interface UiConfig {
   ecrRepository: ecr.IRepository;
-  ecrImageTag: string;
-  serviceName: string;
+  imageTag: string;
+  cpu: number;
+  memoryLimitMiB: number;
+  desiredCount: number;
+}
+
+interface BackendConfig {
+  ecrRepository: ecr.IRepository;
+  imageTag: string;
   cpu: number;
   memoryLimitMiB: number;
   desiredCount: number;
   dynamodbTable: dynamodb.TableV2;
+  dynamodbLandingTable: dynamodb.TableV2;
+}
+
+interface GridwalkProps extends cdk.StackProps {
+  vpc: ec2.IVpc;
+  cluster: ecs.ICluster;
+  serviceName: string;
   serviceConnectNamespace: string;
-  tileServerUrl: string;
   listener: elbv2.IApplicationListener;
   baseUrl: string;
+
+  ui: UiConfig;
+  backend: BackendConfig;
 }
 
 export class Gridwalk extends Construct {
-  public readonly securityGroup: ec2.SecurityGroup;
-  public readonly taskDefinition: ecs.FargateTaskDefinition;
+  public readonly backendSecurityGroup: ec2.SecurityGroup;
+  public readonly backendTaskDefinition: ecs.FargateTaskDefinition;
 
   constructor(scope: Construct, id: string, props: GridwalkProps) {
     super(scope, id);
 
-    // Generate unique bucket name
-    const uniqueBucketName = `${cdk.Names.uniqueId(this)}-remote-file-bucket`;
-
-    // Create the S3 bucket for remote file upload
-    const remoteFileBucket = new s3.Bucket(this, "remoteFileBucket", {
-      bucketName: uniqueBucketName.toLowerCase(),
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
-
-    // Create a task definition
-    this.taskDefinition = new ecs.FargateTaskDefinition(this, "TaskDef", {
-      memoryLimitMiB: props.memoryLimitMiB,
-      cpu: props.cpu,
+    // Create a task definition for the backend
+    this.backendTaskDefinition = new ecs.FargateTaskDefinition(this, "BackendTaskDef", {
+      memoryLimitMiB: props.backend.memoryLimitMiB,
+      cpu: props.backend.cpu,
       runtimePlatform: {
         cpuArchitecture: ecs.CpuArchitecture.ARM64,
       },
@@ -57,15 +60,15 @@ export class Gridwalk extends Construct {
       "arn:aws:secretsmanager:us-east-1:017820660020:secret:os_api_gridwalk_basemap",
     );
 
-    // Add container to the task definition
-    const container = this.taskDefinition.addContainer("GridwalkContainer", {
+    // Add container to the backend task definition
+    const backendContainer = this.backendTaskDefinition.addContainer("GridwalkBackendContainer", {
       image: ecs.ContainerImage.fromEcrRepository(
-        props.ecrRepository,
-        props.ecrImageTag,
+        props.backend.ecrRepository,
+        props.backend.imageTag,
       ),
       environment: {
-        DYNAMODB_TABLE: props.dynamodbTable.tableName,
-        S3_BUCKET_NAME: remoteFileBucket.bucketName,
+        DYNAMODB_TABLE: props.backend.dynamodbTable.tableName,
+        DYNAMODB_LANDING_TABLE: props.backend.dynamodbLandingTable.tableName,
       },
       secrets: {
         OS_PROJECT_API_KEY: ecs.Secret.fromSecretsManager(
@@ -77,41 +80,41 @@ export class Gridwalk extends Construct {
           "project_api_secret",
         ),
       },
-      logging: new ecs.AwsLogDriver({ streamPrefix: "GridwalkService" }),
+      logging: new ecs.AwsLogDriver({ streamPrefix: "GridwalkBackendService" }),
     });
 
     // Add port mapping to the container
-    container.addPortMappings({
-      containerPort: 3000,
+    backendContainer.addPortMappings({
+      containerPort: 3001,
       protocol: ecs.Protocol.TCP,
     });
 
-    this.securityGroup = new ec2.SecurityGroup(this, "SecurityGroup", {
+    this.backendSecurityGroup = new ec2.SecurityGroup(this, "BackendSecurityGroup", {
       vpc: props.vpc,
-      description: "Used by Gridwalk Service",
+      description: "Used by Gridwalk Backend Service",
       allowAllOutbound: true,
       disableInlineRules: true,
     });
 
-    // Allow inbound traffic on port 3000 from the ALB's security group
-    this.securityGroup.addIngressRule(
+    // Allow inbound traffic on port 3001 from the ALB's security group
+    this.backendSecurityGroup.addIngressRule(
       ec2.SecurityGroup.fromSecurityGroupId(
         this,
         "ALBSecurityGroup",
         props.listener.connections.securityGroups[0].securityGroupId,
       ),
-      ec2.Port.tcp(3000),
+      ec2.Port.tcp(3001),
       "Allow inbound traffic from ALB",
     );
 
-    // Create the Fargate service
-    const fargateService = new ecs.FargateService(this, "Service", {
+    // Create the Fargate service for backend
+    const backendService = new ecs.FargateService(this, "BackendService", {
       cluster: props.cluster,
-      taskDefinition: this.taskDefinition,
-      desiredCount: props.desiredCount,
-      serviceName: props.serviceName,
+      taskDefinition: this.backendTaskDefinition,
+      desiredCount: props.backend.desiredCount,
+      serviceName: `${props.serviceName}-backend`,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      securityGroups: [this.securityGroup],
+      securityGroups: [this.backendSecurityGroup],
       assignPublicIp: true,
       enableECSManagedTags: true,
       enableExecuteCommand: true,
@@ -121,34 +124,33 @@ export class Gridwalk extends Construct {
       },
     });
 
-    // Create a target group for the service
-    const targetGroup = new elbv2.ApplicationTargetGroup(this, "TargetGroup", {
+    // Create a target group for the backend service
+    const backendTargetGroup = new elbv2.ApplicationTargetGroup(this, "BackendTargetGroup", {
       vpc: props.vpc,
-      port: 3000,
+      port: 3001,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
       healthCheck: {
-        path: "/",
+        path: "/health",
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(3),
       },
     });
 
-    // Attach the service to the target group
-    fargateService.attachToApplicationTargetGroup(targetGroup);
+    // Attach the backend service to the target group
+    backendService.attachToApplicationTargetGroup(backendTargetGroup);
 
     // Add the target group to the listener
-    props.listener.addTargetGroups("GridwalkTargetGroup", {
-      targetGroups: [targetGroup],
-      priority: 10, // Adjust this priority as needed
+    props.listener.addTargetGroups("GridwalkBackendTargetGroup", {
+      targetGroups: [backendTargetGroup],
+      priority: 10,
       conditions: [
-        elbv2.ListenerCondition.hostHeaders([`app.${props.baseUrl}`]),
+        elbv2.ListenerCondition.hostHeaders([`api.${props.baseUrl}`]),
       ],
     });
 
     // Grant the task execution role permission to pull images from ECR
-    props.ecrRepository.grantPull(this.taskDefinition.executionRole!);
+    props.backend.ecrRepository.grantPull(this.backendTaskDefinition.executionRole!);
 
-    remoteFileBucket.grantReadWrite(this.taskDefinition.taskRole);
   }
 }

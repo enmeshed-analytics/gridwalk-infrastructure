@@ -36,24 +36,6 @@ export class Database extends Construct {
     const parameterGroup = new rds.ParameterGroup(this, 'PostGISVectorTilesParameterGroup', {
       engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_16 }), // Specify your Postgres version
       parameters: {
-        // TODO: Look at postgres optimizations
-        //
-        // General PostgreSQL optimizations
-        //'shared_buffers': '{DBInstanceClassMemory*3/4/8192}', // Increase shared memory buffers
-        //'work_mem': '50MB',                       // Increase memory for complex operations
-        //'maintenance_work_mem': '256MB',          // Increase memory for maintenance operations
-        //'effective_cache_size': '3GB',            // Estimate of how much memory is available for disk caching
-        //'random_page_cost': '1.1',                // Assuming SSD storage
-        //'effective_io_concurrency': '200',        // Concurrent I/O operations (for SSDs)
-
-        // PostGIS specific optimizations
-        //'max_worker_processes': '8',              // Increase for parallel queries
-        //'max_parallel_workers_per_gather': '4',   // Parallel workers per gather node
-        //'max_parallel_workers': '8',              // Maximum parallel workers
-        //'jit': 'on',                              // Enable JIT compilation
-        //'geqo': 'on',                             // Genetic Query Optimizer
-        //'geqo_threshold': '12',                   // Use GEQO for queries with 12 or more tables
-
         // Vector tile specific
         'statement_timeout': '60000',             // Limit long-running queries (60 seconds)
         'idle_in_transaction_session_timeout': '60000', // Timeout idle sessions (60 seconds)
