@@ -152,5 +152,91 @@ export class Gridwalk extends Construct {
     // Grant the task execution role permission to pull images from ECR
     props.backend.ecrRepository.grantPull(this.backendTaskDefinition.executionRole!);
 
+    // Create a task definition for the UI
+    const uiTaskDefinition = new ecs.FargateTaskDefinition(this, "UiTaskDef", {
+      memoryLimitMiB: props.ui.memoryLimitMiB,
+      cpu: props.ui.cpu,
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.ARM64,
+      },
+    });
+
+    // Add container to the UI task definition
+    const uiContainer = uiTaskDefinition.addContainer("GridwalkUiContainer", {
+      image: ecs.ContainerImage.fromEcrRepository(
+        props.ui.ecrRepository,
+        props.ui.imageTag,
+      ),
+      environment: {
+        GRIDWALK_API: "api.gridwalk.co",
+      },
+      logging: new ecs.AwsLogDriver({ streamPrefix: "GridwalkUiService" }),
+    });
+
+    uiContainer.addPortMappings({
+      containerPort: 3000,
+      protocol: ecs.Protocol.TCP,
+    });
+
+    const uiSecurityGroup = new ec2.SecurityGroup(this, "UiSecurityGroup", {
+      vpc: props.vpc,
+      description: "Used by Gridwalk UI Service",
+      allowAllOutbound: true,
+      disableInlineRules: true,
+    });
+
+    // Allow inbound traffic on port 3000 from the ALB's security group
+    uiSecurityGroup.addIngressRule(
+      ec2.SecurityGroup.fromSecurityGroupId(
+        this,
+        "UiAlbSecurityGroup",
+        props.listener.connections.securityGroups[0].securityGroupId,
+      ),
+      ec2.Port.tcp(3000),
+      "Allow inbound traffic from ALB",
+    );
+
+    const uiService = new ecs.FargateService(this, "UiService", {
+      cluster: props.cluster,
+      taskDefinition: uiTaskDefinition,
+      desiredCount: props.ui.desiredCount,
+      serviceName: `${props.serviceName}-ui`,
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      securityGroups: [uiSecurityGroup],
+      assignPublicIp: true,
+      enableECSManagedTags: true,
+      enableExecuteCommand: true,
+      propagateTags: ecs.PropagatedTagSource.TASK_DEFINITION,
+      serviceConnectConfiguration: {
+        namespace: props.serviceConnectNamespace,
+      },
+    });
+
+    const uiTargetGroup = new elbv2.ApplicationTargetGroup(this, "UiTargetGroup", {
+      vpc: props.vpc,
+      port: 3000,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targetType: elbv2.TargetType.IP,
+      healthCheck: {
+        path: "/",
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(3),
+      },
+    });
+    
+    // Attach the UI service to the target group
+    uiService.attachToApplicationTargetGroup(uiTargetGroup);
+    
+    // Add the target group to the listener
+    props.listener.addTargetGroups("GridwalkUiTargetGroup", {
+      targetGroups: [uiTargetGroup],
+      priority: 20,
+      conditions: [
+        elbv2.ListenerCondition.hostHeaders([props.baseUrl]),
+      ],
+    });
+    
+    // Grant the task execution role permission to pull images from ECR
+    props.ui.ecrRepository.grantPull(uiTaskDefinition.executionRole!);
   }
 }
