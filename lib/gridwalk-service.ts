@@ -14,6 +14,7 @@ interface UiConfig {
   cpu: number;
   memoryLimitMiB: number;
   desiredCount: number;
+  dynamodbLandingTable: dynamodb.TableV2;
 }
 
 interface BackendConfig {
@@ -23,7 +24,6 @@ interface BackendConfig {
   memoryLimitMiB: number;
   desiredCount: number;
   dynamodbTable: dynamodb.TableV2;
-  dynamodbLandingTable: dynamodb.TableV2;
 }
 
 interface GridwalkProps extends cdk.StackProps {
@@ -41,6 +41,7 @@ interface GridwalkProps extends cdk.StackProps {
 export class Gridwalk extends Construct {
   public readonly backendSecurityGroup: ec2.SecurityGroup;
   public readonly backendTaskDefinition: ecs.FargateTaskDefinition;
+  public readonly uiTaskDefinition: ecs.FargateTaskDefinition;
 
   constructor(scope: Construct, id: string, props: GridwalkProps) {
     super(scope, id);
@@ -68,7 +69,6 @@ export class Gridwalk extends Construct {
       ),
       environment: {
         DYNAMODB_TABLE: props.backend.dynamodbTable.tableName,
-        DYNAMODB_LANDING_TABLE: props.backend.dynamodbLandingTable.tableName,
       },
       secrets: {
         OS_PROJECT_API_KEY: ecs.Secret.fromSecretsManager(
@@ -153,7 +153,7 @@ export class Gridwalk extends Construct {
     props.backend.ecrRepository.grantPull(this.backendTaskDefinition.executionRole!);
 
     // Create a task definition for the UI
-    const uiTaskDefinition = new ecs.FargateTaskDefinition(this, "UiTaskDef", {
+    this.uiTaskDefinition = new ecs.FargateTaskDefinition(this, "UiTaskDef", {
       memoryLimitMiB: props.ui.memoryLimitMiB,
       cpu: props.ui.cpu,
       runtimePlatform: {
@@ -162,13 +162,14 @@ export class Gridwalk extends Construct {
     });
 
     // Add container to the UI task definition
-    const uiContainer = uiTaskDefinition.addContainer("GridwalkUiContainer", {
+    const uiContainer = this.uiTaskDefinition.addContainer("GridwalkUiContainer", {
       image: ecs.ContainerImage.fromEcrRepository(
         props.ui.ecrRepository,
         props.ui.imageTag,
       ),
       environment: {
-        GRIDWALK_API: "api.gridwalk.co",
+        GRIDWALK_API: "https://api.gridwalk.co",
+        DYNAMODB_LANDING_TABLE: props.ui.dynamodbLandingTable.tableName,
       },
       logging: new ecs.AwsLogDriver({ streamPrefix: "GridwalkUiService" }),
     });
@@ -198,7 +199,7 @@ export class Gridwalk extends Construct {
 
     const uiService = new ecs.FargateService(this, "UiService", {
       cluster: props.cluster,
-      taskDefinition: uiTaskDefinition,
+      taskDefinition: this.uiTaskDefinition,
       desiredCount: props.ui.desiredCount,
       serviceName: `${props.serviceName}-ui`,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
@@ -237,6 +238,6 @@ export class Gridwalk extends Construct {
     });
     
     // Grant the task execution role permission to pull images from ECR
-    props.ui.ecrRepository.grantPull(uiTaskDefinition.executionRole!);
+    props.ui.ecrRepository.grantPull(this.uiTaskDefinition.executionRole!);
   }
 }

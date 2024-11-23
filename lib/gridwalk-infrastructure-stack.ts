@@ -105,7 +105,6 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
         memoryLimitMiB: 512,
         desiredCount: 1,
         dynamodbTable: gridwalkTable,
-        dynamodbLandingTable: gridwalkLandingTable
       },
       ui: {
         ecrRepository: this.ecrImage.gridwalkUi,
@@ -113,6 +112,7 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
         cpu: 512,
         memoryLimitMiB: 1024,
         desiredCount: 1,
+        dynamodbLandingTable: gridwalkLandingTable
       }
     });
 
@@ -123,6 +123,6 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
       })
     );
     gridwalkTable.grantReadWriteData(gridwalk.backendTaskDefinition.taskRole!);
-    gridwalkLandingTable.grantReadWriteData(gridwalk.backendTaskDefinition.taskRole!);
+    gridwalkLandingTable.grantReadWriteData(gridwalk.uiTaskDefinition.taskRole!);
   }
 }
