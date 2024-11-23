@@ -98,5 +98,23 @@ export class Network extends Construct {
       open: true,
       defaultAction: elbv2.ListenerAction.fixedResponse(404),
     });
+
+    // Add redirect rules for each hosted zone
+    // App used to be on app. subdomain. Now it is on the Apex
+    props.hostedZones.forEach(hostedZone => {
+      // Add listener rule to redirect app.domain.com to domain.com
+      this.httpsListener.addAction(`RedirectAppSubdomain-${hostedZone.zoneName}`, {
+        priority: 1,  // High priority to catch subdomain requests first
+        conditions: [
+          elbv2.ListenerCondition.hostHeaders([`app.${hostedZone.zoneName}`])
+        ],
+        action: elbv2.ListenerAction.redirect({
+          host: hostedZone.zoneName,
+          port: '443',
+          protocol: 'HTTPS',
+          permanent: true,
+        })
+      });
+    });
   }
 }
