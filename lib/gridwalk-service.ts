@@ -161,6 +161,13 @@ export class Gridwalk extends Construct {
       },
     });
 
+    const nodemailer_secret = secretsmanager.Secret.fromSecretPartialArn(
+      this,
+      "NodemailerSecret",
+      "arn:aws:secretsmanager:us-east-1:017820660020:secret:welcome_email_gw",
+    );
+
+
     // Add container to the UI task definition
     const uiContainer = this.uiTaskDefinition.addContainer("GridwalkUiContainer", {
       image: ecs.ContainerImage.fromEcrRepository(
@@ -170,6 +177,16 @@ export class Gridwalk extends Construct {
       environment: {
         GRIDWALK_API: "https://api.gridwalk.co",
         DYNAMODB_LANDING_TABLE: props.ui.dynamodbLandingTable.tableName,
+      },
+      secrets: {
+        NODEMAILER_USER: ecs.Secret.fromSecretsManager(
+          nodemailer_secret,
+          "user",
+        ),
+        NODEMAILER_PASS: ecs.Secret.fromSecretsManager(
+          nodemailer_secret,
+          "pass",
+        ),
       },
       logging: new ecs.AwsLogDriver({ streamPrefix: "GridwalkUiService" }),
     });
