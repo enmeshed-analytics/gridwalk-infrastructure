@@ -113,6 +113,14 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
         memoryLimitMiB: 1024,
         desiredCount: 1,
         dynamodbLandingTable: gridwalkLandingTable
+      },
+      product: {
+        ecrRepository: this.ecrImage.gridwalkProduct,
+        imageTag: "latest",
+        cpu: 256,
+        memoryLimitMiB: 512,
+        desiredCount: 1,
+        dynamodbLandingTable: gridwalkLandingTable
       }
     });
 
@@ -124,5 +132,6 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
     );
     gridwalkTable.grantReadWriteData(gridwalk.backendTaskDefinition.taskRole!);
     gridwalkLandingTable.grantReadWriteData(gridwalk.uiTaskDefinition.taskRole!);
+    gridwalkLandingTable.grantReadWriteData(gridwalk.productTaskDefinition.taskRole!);
   }
 }
