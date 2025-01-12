@@ -34,6 +34,7 @@ interface BackendConfig {
   memoryLimitMiB: number;
   desiredCount: number;
   dynamodbTable: dynamodb.TableV2;
+  primaryGeoDatabaseSecret: secretsmanager.ISecret;
 }
 
 interface GridwalkProps extends cdk.StackProps {
@@ -80,7 +81,9 @@ export class Gridwalk extends Construct {
         props.backend.imageTag,
       ),
       environment: {
-        DYNAMODB_TABLE: props.backend.dynamodbTable.tableName,
+        GW_DYNAMODB_TABLE: props.backend.dynamodbTable.tableName,
+        GW_USER_EMAIL: "admin@gridwalk.co",
+        GW_USER_PASSWORD: "initialPass999",
       },
       secrets: {
         OS_PROJECT_API_KEY: ecs.Secret.fromSecretsManager(
@@ -90,6 +93,26 @@ export class Gridwalk extends Construct {
         OS_PROJECT_API_SECRET: ecs.Secret.fromSecretsManager(
           os_api_secret,
           "project_api_secret",
+        ),
+        GW_POSTGRES_HOST: ecs.Secret.fromSecretsManager(
+          props.backend.primaryGeoDatabaseSecret,
+          "host",
+        ),
+        GW_POSTGRES_PORT: ecs.Secret.fromSecretsManager(
+          props.backend.primaryGeoDatabaseSecret,
+          "port",
+        ),
+        GW_POSTGRES_DB: ecs.Secret.fromSecretsManager(
+          props.backend.primaryGeoDatabaseSecret,
+          "database",
+        ),
+        GW_POSTGRES_USERNAME: ecs.Secret.fromSecretsManager(
+          props.backend.primaryGeoDatabaseSecret,
+          "username",
+        ),
+        GW_POSTGRES_PASSWORD: ecs.Secret.fromSecretsManager(
+          props.backend.primaryGeoDatabaseSecret,
+          "password",
         ),
       },
       logging: new ecs.AwsLogDriver({ streamPrefix: "GridwalkBackendService" }),

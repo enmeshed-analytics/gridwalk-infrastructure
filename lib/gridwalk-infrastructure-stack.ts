@@ -102,6 +102,7 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
         memoryLimitMiB: 512,
         desiredCount: 1,
         dynamodbTable: gridwalkTable,
+        primaryGeoDatabaseSecret: database.appSecret
       },
       ui: {
         ecrRepository: this.ecrImage.gridwalkUi,
@@ -130,5 +131,12 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
     gridwalkTable.grantReadWriteData(gridwalk.backendTaskDefinition.taskRole!);
     gridwalkLandingTable.grantReadWriteData(gridwalk.uiTaskDefinition.taskRole!);
     gridwalkLandingTable.grantReadWriteData(gridwalk.productTaskDefinition.taskRole!);
+
+    // Allow Backend task to connect to Postgres
+    database.databaseSecurityGroup.addIngressRule(
+      ec2.Peer.securityGroupId(gridwalk.backendSecurityGroup.securityGroupId),
+      ec2.Port.POSTGRES,
+      "Gridwalk Backend to Postgres"
+    );
   }
 }
