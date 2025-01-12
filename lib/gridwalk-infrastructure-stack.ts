@@ -52,21 +52,19 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
       sortKey : { name: 'SK', type: dynamodb.AttributeType.STRING },
       globalSecondaryIndexes: [
         {
-          indexName: 'GSI_USER',
+          indexName: 'user',
           partitionKey: { name: 'user_id', type: dynamodb.AttributeType.STRING },
         },
         {
-          indexName: 'GSI_WORKSPACE_BY_NAME',
-          partitionKey: { name: 'workspace_name', type: dynamodb.AttributeType.STRING },
+          indexName: 'con',
+          partitionKey: { name: 'con_id', type: dynamodb.AttributeType.STRING },
         }
-
       ]
     });
 
     const gridwalkLandingTable = new dynamodb.TableV2(this, 'GridwalkLandingTable', {
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
     });
-
 
     const instance = new Instance(this, 'Adhoc', {
       network: {
@@ -89,7 +87,6 @@ export class GridwalkInfrastructureStack extends cdk.Stack {
       vpc: this.network.vpc,
       name: "Gridwalk"
     });
-
 
     const gridwalk = new Gridwalk(this, 'Gridwalk', {
       vpc: this.network.vpc,
