@@ -271,7 +271,7 @@ export class Gridwalk extends Construct {
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
       healthCheck: {
-        path: "/",
+        path: "/login",
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(3),
       },
