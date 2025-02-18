@@ -78,10 +78,9 @@ export const handler: Handler = async (event, context) => {
       // Create a user and grant write access to the database
       await dbClient.query(`CREATE USER ${appSecret.username} WITH ENCRYPTED PASSWORD '${appSecret.password}';`);
     }
-    await dbClient.query(`GRANT CONNECT ON DATABASE ${dbName} TO ${appSecret.username};`);
-    await dbClient.query(`GRANT USAGE ON SCHEMA ${schemaName} TO ${appSecret.username};`);
-    await dbClient.query(`GRANT CREATE ON SCHEMA ${schemaName} TO ${appSecret.username};`);
-    await dbClient.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA ${schemaName} GRANT INSERT, UPDATE, DELETE ON TABLES TO ${appSecret.username};`);
+    await dbClient.query(`GRANT CONNECT, CREATE ON DATABASE ${dbName} TO ${appSecret.username};`);
+    // Set default privileges for future tables in any schema
+    await dbClient.query(`ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO ${appSecret.username};`);
 
     // Create read only user
     const readUserExistsResult = await dbClient.query(`SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='${readSecret.username}';`);
@@ -90,9 +89,7 @@ export const handler: Handler = async (event, context) => {
       await dbClient.query(`CREATE USER ${readSecret.username} WITH ENCRYPTED PASSWORD '${readSecret.password}';`);
     }
     await dbClient.query(`GRANT CONNECT ON DATABASE ${dbName} TO ${readSecret.username};`);
-    await dbClient.query(`GRANT USAGE ON SCHEMA ${schemaName} TO ${readSecret.username};`);
-    await dbClient.query(`GRANT SELECT ON ALL TABLES IN SCHEMA ${schemaName} TO ${readSecret.username};`);
-    await dbClient.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA ${schemaName} GRANT SELECT ON TABLES TO ${readSecret.username};`);
+    await dbClient.query(`GRANT pg_read_all_data TO ${readSecret.username};`);
 
    // Create gis admin user
     const gisadminUserExistsResult = await dbClient.query(`SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='${gisadminSecret.username}';`);
@@ -100,15 +97,14 @@ export const handler: Handler = async (event, context) => {
       await dbClient.query(`CREATE USER ${gisadminSecret.username} WITH ENCRYPTED PASSWORD '${gisadminSecret.password}';`);
     }
     await dbClient.query(`GRANT CONNECT ON DATABASE ${dbName} TO ${gisadminSecret.username};`);
-    await dbClient.query(`GRANT USAGE ON SCHEMA ${schemaName} TO ${gisadminSecret.username};`);
     await dbClient.query(`GRANT USAGE ON SCHEMA public TO ${gisadminSecret.username};`);
-    await dbClient.query(`GRANT SELECT ON ALL TABLES IN SCHEMA ${schemaName} TO ${gisadminSecret.username};`);
+    await dbClient.query(`GRANT pg_read_all_data, pg_write_all_data TO ${gisadminSecret.username};`);
     await dbClient.query(`GRANT rds_superuser TO ${gisadminSecret.username};`);
     await dbClient.query(`GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${gisadminSecret.username};`);
 
     // Allow root user to grant access to tables created using app user
     await dbClient.query(`GRANT ${appSecret.username} TO ${masterSecret.username};`);
-    await dbClient.query(`ALTER DEFAULT PRIVILEGES FOR USER ${appSecret.username} IN SCHEMA ${schemaName} GRANT SELECT ON TABLES TO ${readSecret.username};`);
+    await dbClient.query(`ALTER DEFAULT PRIVILEGES FOR USER ${appSecret.username} GRANT SELECT ON TABLES TO ${readSecret.username};`);
 
     dbClient.end();
 
